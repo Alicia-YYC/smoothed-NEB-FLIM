@@ -1,14 +1,14 @@
 """
-非参数贝叶斯荧光寿命分析 (Nonparametric Bayesian FLIM Analysis)
+Nonparametric Bayesian Fluorescence Lifetime Analysis (Nonparametric Bayesian FLIM Analysis)
 
-功能：
-1. 模拟双指数衰减光子直方图数据（加背景）
-2. 构建可能寿命的概率库 P(τ)
-3. 进行非参数最大似然估计（NPMLE）获取先验分布
-4. 对每个像素用 EM 进行最大后验估计（MAP）恢复参数
+Features:
+1. Simulate dual-exponential decay photon histogram data (with background)
+2. Build probability library P(τ) for possible lifetimes
+3. Perform Non-Parametric Maximum Likelihood Estimation (NPMLE) to obtain prior distribution
+4. Apply Expectation-Maximization (EM) for Maximum A Posteriori (MAP) estimation to recover parameters for each pixel
 
-作者：AI Assistant
-日期：2025-01-27
+Author: AI Assistant
+Date: 2025-01-27
 """
 
 import numpy as np
@@ -25,34 +25,34 @@ warnings.filterwarnings('ignore')
 
 class NonparametricBayesianFLIM:
     """
-    非参数贝叶斯荧光寿命分析类
+    Nonparametric Bayesian Fluorescence Lifetime Analysis Class
     """
     
     def __init__(self, tau_range: Tuple[float, float] = (0.1, 10.0), 
                  num_tau_points: int = 100, time_range: float = 12.5, 
                  num_channels: int = 256):
         """
-        初始化参数
+        Initialize parameters
         
         Args:
-            tau_range: 寿命范围 (ns)
-            num_tau_points: 寿命空间中的点数
-            time_range: 时间范围 (ns)
-            num_channels: 时间通道数
+            tau_range: Lifetime range (ns)
+            num_tau_points: Number of points in lifetime space
+            time_range: Time range (ns)
+            num_channels: Number of time channels
         """
         self.tau_range = tau_range
         self.num_tau_points = num_tau_points
         self.time_range = time_range
         self.num_channels = num_channels
         
-        # 构建寿命空间（对数分布）
+        # Build lifetime space (logarithmic distribution)
         self.tau_space = np.logspace(np.log10(tau_range[0]), np.log10(tau_range[1]), num_tau_points)
         
-        # 构建时间通道
+        # Build time channels
         self.time_channels = np.linspace(0, time_range, num_channels + 1)
         self.time_channel_centers = np.linspace(0, time_range, num_channels)
         
-        # 初始化先验分布
+        # Initialize prior distribution
         self.prior_distribution = None
         
     def simulate_dual_exponential_histogram(self, tau1: float, tau2: float, 
@@ -60,41 +60,41 @@ class NonparametricBayesianFLIM:
                                           background_ratio: float = 0.1,
                                           noise_level: float = 0.05) -> np.ndarray:
         """
-        模拟双指数衰减光子直方图
+        Simulate dual-exponential decay photon histogram
         
         Args:
-            tau1: 第一个寿命成分 (ns)
-            tau2: 第二个寿命成分 (ns)
-            fraction1: 第一个成分的比例
-            total_photons: 总光子数
-            background_ratio: 背景光子比例
-            noise_level: 噪声水平
+            tau1: First lifetime component (ns)
+            tau2: Second lifetime component (ns)
+            fraction1: Proportion of first component
+            total_photons: Total number of photons
+            background_ratio: Background photon ratio
+            noise_level: Noise level
             
         Returns:
-            光子直方图数组
+            Photon histogram array
         """
-        # 计算理想的双指数衰减
+        # Calculate ideal dual-exponential decay
         ideal_decay = (fraction1 * np.exp(-self.time_channel_centers / tau1) + 
                       (1 - fraction1) * np.exp(-self.time_channel_centers / tau2))
         
-        # 归一化
+        # Normalize
         ideal_decay = ideal_decay / np.sum(ideal_decay)
         
-        # 分配光子数
+        # Allocate photon numbers
         signal_photons = int(total_photons * (1 - background_ratio))
         background_photons = int(total_photons * background_ratio)
         
-        # 生成信号光子
+        # Generate signal photons
         signal_histogram = np.random.poisson(ideal_decay * signal_photons)
         
-        # 生成背景光子（均匀分布）
+        # Generate background photons (uniform distribution)
         background_histogram = np.random.poisson(background_photons / self.num_channels, 
                                                size=self.num_channels)
         
-        # 合并信号和背景
+        # Combine signal and background
         total_histogram = signal_histogram + background_histogram
         
-        # 添加额外噪声
+        # Add additional noise
         noise = np.random.normal(0, noise_level * np.sqrt(total_histogram))
         total_histogram = np.maximum(0, total_histogram + noise).astype(int)
         
@@ -102,27 +102,27 @@ class NonparametricBayesianFLIM:
     
     def generate_training_data(self, num_samples: int = 1000) -> List[np.ndarray]:
         """
-        生成训练数据用于构建先验分布
+        Generate training data for building prior distribution
         
         Args:
-            num_samples: 样本数量
+            num_samples: Number of samples
             
         Returns:
-            训练直方图列表
+            List of training histograms
         """
-        print(f"生成 {num_samples} 个训练样本...")
+        print(f"Generating {num_samples} training samples...")
         
         training_histograms = []
         
         for i in range(num_samples):
-            # 随机化参数
-            tau1 = np.random.uniform(1.5, 3.0)  # 长寿命范围
-            tau2 = np.random.uniform(0.5, 1.2)  # 短寿命范围
-            fraction1 = np.random.uniform(0.4, 0.8)  # 比例范围
-            total_photons = np.random.uniform(50000, 200000)  # 光子数范围
-            background_ratio = np.random.uniform(0.05, 0.2)  # 背景比例范围
+            # Randomize parameters
+            tau1 = np.random.uniform(1.5, 3.0)  # Long lifetime range
+            tau2 = np.random.uniform(0.5, 1.2)  # Short lifetime range
+            fraction1 = np.random.uniform(0.4, 0.8)  # Proportion range
+            total_photons = np.random.uniform(50000, 200000)  # Photon number range
+            background_ratio = np.random.uniform(0.05, 0.2)  # Background ratio range
             
-            # 生成直方图
+            # Generate histogram
             histogram = self.simulate_dual_exponential_histogram(
                 tau1, tau2, fraction1, int(total_photons), background_ratio
             )
@@ -130,64 +130,64 @@ class NonparametricBayesianFLIM:
             training_histograms.append(histogram)
             
             if (i + 1) % 100 == 0:
-                print(f"已生成 {i + 1} 个样本")
+                print(f"Generated {i + 1} samples")
         
         return training_histograms
     
     def build_probability_library(self, histograms: List[np.ndarray]) -> np.ndarray:
         """
-        构建寿命概率库
+        Build lifetime probability library
         
         Args:
-            histograms: 训练直方图列表
+            histograms: List of training histograms
             
         Returns:
-            寿命概率数组
+            Lifetime probability array
         """
-        print("构建寿命概率库...")
+        print("Building lifetime probability library...")
         
         tau_probabilities = np.zeros(self.num_tau_points)
         
         for i, histogram in enumerate(histograms):
-            # 对每个直方图进行拟合
+            # Fit each histogram
             fitted_taus = self.fit_histogram_to_taus(histogram)
             
-            # 更新概率库
+            # Update probability library
             for tau in fitted_taus:
-                # 找到最近的寿命点
+                # Find nearest lifetime point
                 tau_idx = np.argmin(np.abs(self.tau_space - tau))
                 tau_probabilities[tau_idx] += 1
             
             if (i + 1) % 100 == 0:
-                print(f"已处理 {i + 1} 个直方图")
+                print(f"Processed {i + 1} histograms")
         
-        # 归一化
+        # Normalize
         tau_probabilities = tau_probabilities / np.sum(tau_probabilities)
         
         return tau_probabilities
     
     def fit_histogram_to_taus(self, histogram: np.ndarray, max_components: int = 3) -> List[float]:
         """
-        对直方图拟合多个可能的寿命
+        Fit multiple possible lifetimes to histogram
         
         Args:
-            histogram: 光子直方图
-            max_components: 最大成分数
+            histogram: Photon histogram
+            max_components: Maximum number of components
             
         Returns:
-            拟合的寿命列表
+            List of fitted lifetimes
         """
         best_taus = []
         
-        # 尝试不同数量的成分
+        # Try different numbers of components
         for num_components in range(1, max_components + 1):
-            # 从寿命空间中采样组合
+            # Sample combinations from lifetime space
             tau_combinations = list(itertools.combinations(self.tau_space, num_components))
             
             best_likelihood = -np.inf
             best_tau_combo = None
             
-            # 限制组合数量以避免计算过载
+            # Limit number of combinations to avoid computational overload
             max_combinations = min(100, len(tau_combinations))
             if len(tau_combinations) > max_combinations:
                 selected_indices = np.random.choice(len(tau_combinations), max_combinations, replace=False)
@@ -196,7 +196,7 @@ class NonparametricBayesianFLIM:
                 selected_combinations = tau_combinations
             
             for tau_combo in selected_combinations:
-                # 拟合这个寿命组合
+                # Fit this lifetime combination
                 likelihood = self.calculate_likelihood(histogram, tau_combo)
                 
                 if likelihood > best_likelihood:
@@ -210,33 +210,33 @@ class NonparametricBayesianFLIM:
     
     def calculate_likelihood(self, histogram: np.ndarray, taus: Tuple[float, ...]) -> float:
         """
-        计算给定寿命组合的似然
+        Calculate likelihood for given lifetime combination
         
         Args:
-            histogram: 光子直方图
-            taus: 寿命组合
+            histogram: Photon histogram
+            taus: Lifetime combination
             
         Returns:
-            对数似然
+            Log likelihood
         """
-        # 构建模型
+        # Build model
         model = np.zeros(self.num_channels)
         
-        # 假设等权重
+        # Assume equal weights
         weight = 1.0 / len(taus)
         
         for tau in taus:
             exponential = np.exp(-self.time_channel_centers / tau)
             model += weight * exponential
         
-        # 归一化
+        # Normalize
         model = model / np.sum(model)
         
-        # 缩放模型以匹配总光子数
+        # Scale model to match total photon count
         total_photons = np.sum(histogram)
         model = model * total_photons
         
-        # 计算泊松似然
+        # Calculate Poisson likelihood
         log_likelihood = np.sum(poisson.logpmf(histogram, model))
         
         return log_likelihood
@@ -244,20 +244,20 @@ class NonparametricBayesianFLIM:
     def npmle_estimation(self, histograms: List[np.ndarray], 
                         initial_probabilities: np.ndarray) -> np.ndarray:
         """
-        非参数最大似然估计
+        Non-parametric Maximum Likelihood Estimation
         
         Args:
-            histograms: 训练直方图列表
-            initial_probabilities: 初始概率分布
+            histograms: List of training histograms
+            initial_probabilities: Initial probability distribution
             
         Returns:
-            优化后的概率分布
+            Optimized probability distribution
         """
-        print("进行非参数最大似然估计...")
+        print("Performing Non-parametric Maximum Likelihood Estimation...")
         
         def objective_function(weights):
-            """目标函数：负对数似然"""
-            # 构建混合分布
+            """Objective function: negative log likelihood"""
+            # Build mixed distribution
             mixed_distribution = np.zeros(self.num_channels)
             
             for i, weight in enumerate(weights):
@@ -265,69 +265,69 @@ class NonparametricBayesianFLIM:
                 exponential = np.exp(-self.time_channel_centers / tau)
                 mixed_distribution += weight * exponential
             
-            # 归一化
+            # Normalize
             mixed_distribution = mixed_distribution / np.sum(mixed_distribution)
             
-            # 计算对数似然
+            # Calculate log likelihood
             log_likelihood = 0
             for histogram in histograms:
-                # 缩放模型
+                # Scale model
                 total_photons = np.sum(histogram)
                 model = mixed_distribution * total_photons
                 
-                # 泊松似然
+                # Poisson likelihood
                 log_likelihood += np.sum(poisson.logpmf(histogram, model))
             
             return -log_likelihood
         
-        # 约束条件：权重和为1，权重非负
+        # Constraints: weights sum to 1, weights non-negative
         constraints = [
             {'type': 'eq', 'fun': lambda x: np.sum(x) - 1}
         ]
         bounds = [(0, 1)] * self.num_tau_points
         
-        # 初始猜测
+        # Initial guess
         initial_weights = initial_probabilities.copy()
         
-        # 优化
+        # Optimization
         result = minimize(objective_function, initial_weights, 
                          constraints=constraints, bounds=bounds,
                          method='SLSQP', options={'maxiter': 1000})
         
         if result.success:
-            print("NPMLE 优化成功")
+            print("NPMLE optimization successful")
             return result.x
         else:
-            print("NPMLE 优化失败，使用初始概率")
+            print("NPMLE optimization failed, using initial probabilities")
             return initial_probabilities
     
     def em_map_estimation(self, pixel_histogram: np.ndarray, 
                          max_iterations: int = 100, tolerance: float = 1e-6) -> np.ndarray:
         """
-        期望最大化-最大后验估计
+        Expectation-Maximization Maximum A Posteriori Estimation
         
         Args:
-            pixel_histogram: 像素直方图
-            max_iterations: 最大迭代次数
-            tolerance: 收敛容差
+            pixel_histogram: Pixel histogram
+            max_iterations: Maximum number of iterations
+            tolerance: Convergence tolerance
             
         Returns:
-            后验权重分布
+            Posterior weight distribution
         """
         if self.prior_distribution is None:
-            raise ValueError("请先训练先验分布")
+            raise ValueError("Please train prior distribution first")
         
-        # 初始化权重
+        # Initialize weights
         current_weights = np.ones(self.num_tau_points) / self.num_tau_points
         
         for iteration in range(max_iterations):
-            # E步：计算期望
+            # E-step: Calculate expectations
             responsibilities = self.expectation_step(pixel_histogram, current_weights)
             
-            # M步：最大化后验
+            # M-step: Maximize posterior
             new_weights = self.maximization_step(responsibilities, pixel_histogram)
             
-            # 检查收敛
+            # Check convergence
             if np.allclose(current_weights, new_weights, rtol=tolerance):
                 break
                 
@@ -337,14 +337,14 @@ class NonparametricBayesianFLIM:
     
     def expectation_step(self, histogram: np.ndarray, weights: np.ndarray) -> np.ndarray:
         """
-        期望步骤
+        Expectation step
         
         Args:
-            histogram: 光子直方图
-            weights: 当前权重
+            histogram: Photon histogram
+            weights: Current weights
             
         Returns:
-            责任矩阵
+            Responsibility matrix
         """
         responsibilities = np.zeros((self.num_tau_points, self.num_channels))
         
@@ -352,29 +352,29 @@ class NonparametricBayesianFLIM:
             exponential = np.exp(-self.time_channel_centers / tau)
             responsibilities[i] = weights[i] * exponential
         
-        # 归一化
+        # Normalize
         responsibilities = responsibilities / np.sum(responsibilities, axis=0, keepdims=True)
         
         return responsibilities
     
     def maximization_step(self, responsibilities: np.ndarray, histogram: np.ndarray) -> np.ndarray:
         """
-        最大化步骤（包含先验）
+        Maximization step (including prior)
         
         Args:
-            responsibilities: 责任矩阵
-            histogram: 光子直方图
+            responsibilities: Responsibility matrix
+            histogram: Photon histogram
             
         Returns:
-            新的权重分布
+            New weight distribution
         """
-        # 计算后验权重
+        # Calculate posterior weights
         posterior_weights = np.sum(responsibilities * histogram[np.newaxis, :], axis=1)
         
-        # 结合先验
+        # Combine with prior
         posterior_weights = posterior_weights * self.prior_distribution
         
-        # 归一化
+        # Normalize
         posterior_weights = posterior_weights / np.sum(posterior_weights)
         
         return posterior_weights
@@ -382,18 +382,18 @@ class NonparametricBayesianFLIM:
     def extract_significant_components(self, posterior_weights: np.ndarray, 
                                      threshold: float = 0.01) -> List[Dict]:
         """
-        提取显著成分
+        Extract significant components
         
         Args:
-            posterior_weights: 后验权重
-            threshold: 显著性阈值
+            posterior_weights: Posterior weights
+            threshold: Significance threshold
             
         Returns:
-            显著成分列表
+            List of significant components
         """
         significant_components = []
         
-        # 找到超过阈值的成分
+        # Find components above threshold
         significant_indices = np.where(posterior_weights > threshold)[0]
         
         for idx in significant_indices:
@@ -404,49 +404,49 @@ class NonparametricBayesianFLIM:
             }
             significant_components.append(component)
         
-        # 按权重排序
+        # Sort by weight
         significant_components.sort(key=lambda x: x['weight'], reverse=True)
         
         return significant_components
     
     def train_prior(self, training_histograms: List[np.ndarray]) -> np.ndarray:
         """
-        训练先验分布
+        Train prior distribution
         
         Args:
-            training_histograms: 训练直方图列表
+            training_histograms: List of training histograms
             
         Returns:
-            先验分布
+            Prior distribution
         """
-        print("开始训练先验分布...")
+        print("Starting prior distribution training...")
         
-        # 步骤1：构建概率库
+        # Step 1: Build probability library
         tau_probabilities = self.build_probability_library(training_histograms)
         
-        # 步骤2：NPMLE估计
+        # Step 2: NPMLE estimation
         self.prior_distribution = self.npmle_estimation(training_histograms, tau_probabilities)
         
-        print("先验分布训练完成")
+        print("Prior distribution training completed")
         return self.prior_distribution
     
     def analyze_pixel(self, pixel_histogram: np.ndarray) -> Dict:
         """
-        分析单个像素
+        Analyze single pixel
         
         Args:
-            pixel_histogram: 像素直方图
+            pixel_histogram: Pixel histogram
             
         Returns:
-            分析结果
+            Analysis result
         """
-        # 使用EM-MAP估计
+        # Use EM-MAP estimation
         posterior_weights = self.em_map_estimation(pixel_histogram)
         
-        # 提取主要寿命成分
+        # Extract main lifetime components
         significant_components = self.extract_significant_components(posterior_weights)
         
-        # 计算平均寿命
+        # Calculate mean lifetime
         mean_tau = np.sum(posterior_weights * self.tau_space)
         
         result = {
@@ -460,15 +460,15 @@ class NonparametricBayesianFLIM:
     
     def analyze_image(self, image_histograms: List[np.ndarray]) -> List[Dict]:
         """
-        分析整个图像
+        Analyze entire image
         
         Args:
-            image_histograms: 图像直方图列表
+            image_histograms: List of image histograms
             
         Returns:
-            分析结果列表
+            List of analysis results
         """
-        print(f"分析 {len(image_histograms)} 个像素...")
+        print(f"Analyzing {len(image_histograms)} pixels...")
         
         results = []
         for i, pixel_histogram in enumerate(image_histograms):
@@ -476,19 +476,19 @@ class NonparametricBayesianFLIM:
             results.append(pixel_result)
             
             if (i + 1) % 100 == 0:
-                print(f"已分析 {i + 1} 个像素")
+                print(f"Analyzed {i + 1} pixels")
         
         return results
     
     def plot_prior_distribution(self, save_path: Optional[str] = None):
         """
-        绘制先验分布
+        Plot prior distribution
         
         Args:
-            save_path: 保存路径
+            save_path: Save path
         """
         if self.prior_distribution is None:
-            print("请先训练先验分布")
+            print("Please train prior distribution first")
             return
         
         plt.figure(figsize=(10, 6))
@@ -506,30 +506,30 @@ class NonparametricBayesianFLIM:
     def plot_analysis_result(self, pixel_histogram: np.ndarray, result: Dict, 
                            save_path: Optional[str] = None):
         """
-        绘制分析结果
+        Plot analysis result
         
         Args:
-            pixel_histogram: 像素直方图
-            result: 分析结果
-            save_path: 保存路径
+            pixel_histogram: Pixel histogram
+            result: Analysis result
+            save_path: Save path
         """
         fig, axes = plt.subplots(2, 2, figsize=(12, 10))
         
-        # 原始数据
+        # Original data
         axes[0, 0].plot(self.time_channel_centers, pixel_histogram, 'ko-', markersize=3)
         axes[0, 0].set_xlabel('Time (ns)')
         axes[0, 0].set_ylabel('Photon Counts')
         axes[0, 0].set_title('Original Histogram')
         axes[0, 0].grid(True)
         
-        # 后验分布
+        # Posterior distribution
         axes[0, 1].semilogx(self.tau_space, result['posterior_weights'], 'r-', linewidth=2)
         axes[0, 1].set_xlabel('Lifetime (ns)')
         axes[0, 1].set_ylabel('Posterior Weight')
         axes[0, 1].set_title('Posterior Distribution')
         axes[0, 1].grid(True)
         
-        # 显著成分
+        # Significant components
         if result['significant_components']:
             taus = [comp['tau'] for comp in result['significant_components']]
             weights = [comp['weight'] for comp in result['significant_components']]
@@ -540,7 +540,7 @@ class NonparametricBayesianFLIM:
             axes[1, 0].set_xticks(range(len(taus)))
             axes[1, 0].set_xticklabels([f'{tau:.2f}ns' for tau in taus])
         
-        # 拟合结果
+        # Fit result
         model = np.zeros(self.num_channels)
         for comp in result['significant_components']:
             tau = comp['tau']
@@ -548,7 +548,7 @@ class NonparametricBayesianFLIM:
             exponential = np.exp(-self.time_channel_centers / tau)
             model += weight * exponential
         
-        # 归一化和缩放
+        # Normalize and scale
         model = model / np.sum(model)
         total_photons = np.sum(pixel_histogram)
         model = model * total_photons
@@ -571,11 +571,11 @@ class NonparametricBayesianFLIM:
 
 def main():
     """
-    主函数：演示非参数贝叶斯荧光寿命分析
+    Main function: Demonstrate nonparametric Bayesian fluorescence lifetime analysis
     """
-    print("=== 非参数贝叶斯荧光寿命分析演示 ===\n")
+    print("=== Nonparametric Bayesian Fluorescence Lifetime Analysis Demo ===\n")
     
-    # 1. 初始化分析器
+    # 1. Initialize analyzer
     analyzer = NonparametricBayesianFLIM(
         tau_range=(0.1, 10.0),
         num_tau_points=50,
@@ -583,37 +583,37 @@ def main():
         num_channels=256
     )
     
-    # 2. 生成训练数据
+    # 2. Generate training data
     training_histograms = analyzer.generate_training_data(num_samples=500)
     
-    # 3. 训练先验分布
+    # 3. Train prior distribution
     prior = analyzer.train_prior(training_histograms)
     
-    # 4. 绘制先验分布
+    # 4. Plot prior distribution
     analyzer.plot_prior_distribution(save_path='prior_distribution.png')
     
-    # 5. 生成测试数据
-    print("\n生成测试数据...")
+    # 5. Generate test data
+    print("\nGenerating test data...")
     test_histogram = analyzer.simulate_dual_exponential_histogram(
         tau1=2.14, tau2=0.69, fraction1=0.6, total_photons=100000
     )
     
-    # 6. 分析测试数据
-    print("分析测试数据...")
+    # 6. Analyze test data
+    print("Analyzing test data...")
     result = analyzer.analyze_pixel(test_histogram)
     
-    # 7. 显示结果
-    print(f"\n分析结果:")
-    print(f"平均寿命: {result['mean_tau']:.3f} ns")
-    print(f"显著成分数: {result['num_components']}")
+    # 7. Display results
+    print(f"\nAnalysis results:")
+    print(f"Mean lifetime: {result['mean_tau']:.3f} ns")
+    print(f"Number of significant components: {result['num_components']}")
     
     for i, comp in enumerate(result['significant_components']):
-        print(f"成分 {i+1}: τ = {comp['tau']:.3f} ns, 权重 = {comp['weight']:.3f}")
+        print(f"Component {i+1}: τ = {comp['tau']:.3f} ns, weight = {comp['weight']:.3f}")
     
-    # 8. 绘制分析结果
+    # 8. Plot analysis results
     analyzer.plot_analysis_result(test_histogram, result, save_path='analysis_result.png')
     
-    print("\n分析完成！结果已保存到图片文件中。")
+    print("\nAnalysis completed! Results saved to image files.")
 
 
 if __name__ == "__main__":

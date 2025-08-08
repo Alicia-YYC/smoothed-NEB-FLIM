@@ -1,13 +1,13 @@
 """
-复现论文实验：非参数贝叶斯荧光寿命分析性能评估（修复版）
+Paper Experiment Reproduction: Non-parametric Bayesian Fluorescence Lifetime Analysis Performance Evaluation (Fixed Version)
 
-基于论文：Nonparametric empirical Bayesian framework for fluorescence-lifetime imaging microscopy
+Based on paper: Nonparametric empirical Bayesian framework for fluorescence-lifetime imaging microscopy
 """
 
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib
-matplotlib.use('Agg')  # 使用非交互式后端
+matplotlib.use('Agg')  # Use non-interactive backend
 from scipy.stats import norm
 from scipy.optimize import curve_fit
 import time
@@ -18,21 +18,21 @@ warnings.filterwarnings('ignore')
 
 class PaperExperimentReproductionFixed:
     """
-    复现论文实验的类（修复版）
+    Class for reproducing paper experiments (Fixed Version)
     """
     
     def __init__(self, image_size: int = 32, time_range: float = 10.0, 
                  num_channels: int = 256, irf_mean: float = 1.5, 
                  irf_std: float = 0.1):
         """
-        初始化实验参数
+        Initialize experiment parameters
         
         Args:
-            image_size: 图像大小 (32x32)
-            time_range: 时间范围 (ns)
-            num_channels: 时间通道数
-            irf_mean: IRF均值 (ns)
-            irf_std: IRF标准差 (ns)
+            image_size: Image size (32x32)
+            time_range: Time range (ns)
+            num_channels: Number of time channels
+            irf_mean: IRF mean (ns)
+            irf_std: IRF standard deviation (ns)
         """
         self.image_size = image_size
         self.time_range = time_range
@@ -40,41 +40,41 @@ class PaperExperimentReproductionFixed:
         self.irf_mean = irf_mean
         self.irf_std = irf_std
         
-        # 构建时间通道
+        # Build time channels
         self.time_channels = np.linspace(0, time_range, num_channels + 1)
         self.time_channel_centers = np.linspace(0, time_range, num_channels)
         
-        # 构建IRF（高斯分布）
+        # Build IRF (Gaussian distribution)
         self.irf = self._create_gaussian_irf()
         
-        # 初始化先验分布
+        # Initialize prior distribution
         self.prior_distribution = None
         
     def _create_gaussian_irf(self) -> np.ndarray:
-        """创建高斯IRF"""
+        """Create Gaussian IRF"""
         irf = norm.pdf(self.time_channel_centers, self.irf_mean, self.irf_std)
-        return irf / np.sum(irf)  # 归一化
+        return irf / np.sum(irf)  # Normalize
     
     def simulate_ground_truth_image(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
-        模拟真实图像参数（根据论文图4）
+        Simulate ground truth image parameters (based on paper Figure 4)
         
         Returns:
-            tau1_image: τ1图像
-            tau2_image: τ2图像  
-            a_image: a图像
+            tau1_image: τ1 image
+            tau2_image: τ2 image  
+            a_image: a image
         """
-        # 创建32x32网格
+        # Create 32x32 grid
         x, y = np.meshgrid(np.arange(self.image_size), np.arange(self.image_size))
         
-        # 根据论文图4设计参数分布
-        # τ1: 在1.5-3.0 ns之间变化
+        # Design parameter distribution based on paper Figure 4
+        # τ1: varies between 1.5-3.0 ns
         tau1_image = 1.5 + 1.5 * np.sin(np.pi * x / self.image_size) * np.cos(np.pi * y / self.image_size)
         
-        # τ2: 在0.5-1.2 ns之间变化
+        # τ2: varies between 0.5-1.2 ns
         tau2_image = 0.5 + 0.7 * np.cos(np.pi * x / self.image_size) * np.sin(np.pi * y / self.image_size)
         
-        # a: 在0.3-0.8之间变化
+        # a: varies between 0.3-0.8
         a_image = 0.3 + 0.5 * (x + y) / (2 * self.image_size)
         
         return tau1_image, tau2_image, a_image
@@ -82,79 +82,79 @@ class PaperExperimentReproductionFixed:
     def simulate_pixel_histogram(self, tau1: float, tau2: float, a: float, 
                                 n_photons: int, background_ratio: float = 0.001) -> np.ndarray:
         """
-        模拟单个像素的直方图（数值稳定版本）
+        Simulate single pixel histogram (numerically stable version)
         
         Args:
-            tau1: 第一个寿命成分 (ns)
-            tau2: 第二个寿命成分 (ns)
-            a: 第一个成分的比例
-            n_photons: 光子数
-            background_ratio: 背景比例
+            tau1: First lifetime component (ns)
+            tau2: Second lifetime component (ns)
+            a: Proportion of first component
+            n_photons: Number of photons
+            background_ratio: Background ratio
             
         Returns:
-            光子直方图
+            Photon histogram
         """
-        # 计算理想的双指数衰减
+        # Calculate ideal double exponential decay
         ideal_decay = (a / tau1 * np.exp(-self.time_channel_centers / tau1) + 
                       (1 - a) / tau2 * np.exp(-self.time_channel_centers / tau2))
         
-        # 归一化
+        # Normalize
         ideal_decay = ideal_decay / np.sum(ideal_decay)
         
-        # 分配光子数
+        # Allocate photon numbers
         signal_photons = int(n_photons * (1 - background_ratio))
         background_photons = int(n_photons * background_ratio)
         
-        # 生成信号光子（数值稳定版本）
+        # Generate signal photons (numerically stable version)
         expected_signal = ideal_decay * signal_photons
         
-        # 确保数值稳定
-        expected_signal = np.clip(expected_signal, 0, 1000)  # 限制最大值
+        # Ensure numerical stability
+        expected_signal = np.clip(expected_signal, 0, 1000)  # Limit maximum value
         
-        # 使用更稳定的方法生成泊松分布
+        # Use more stable method to generate Poisson distribution
         signal_histogram = np.zeros(self.num_channels, dtype=int)
         for i in range(self.num_channels):
             if expected_signal[i] > 0:
                 signal_histogram[i] = np.random.poisson(expected_signal[i])
         
-        # 生成背景光子（均匀分布）
+        # Generate background photons (uniform distribution)
         if background_photons > 0:
             background_per_channel = background_photons / self.num_channels
             background_histogram = np.random.poisson(background_per_channel, size=self.num_channels)
         else:
             background_histogram = np.zeros(self.num_channels, dtype=int)
         
-        # 合并信号和背景
+        # Combine signal and background
         total_histogram = signal_histogram + background_histogram
         
         return total_histogram
     
     def simulate_flim_image(self, n_photons: int) -> Tuple[List[np.ndarray], np.ndarray, np.ndarray, np.ndarray]:
         """
-        模拟整个FLIM图像
+        Simulate entire FLIM image
         
         Args:
-            n_photons: 每个像素的光子数
+            n_photons: Number of photons per pixel
             
         Returns:
-            histograms: 所有像素的直方图列表
-            tau1_image: τ1真实值图像
-            tau2_image: τ2真实值图像
-            a_image: a真实值图像
+            histograms: List of histograms for all pixels
+            tau1_image: τ1 ground truth image
+            tau2_image: τ2 ground truth image
+            a_image: a ground truth image
         """
-        # 生成真实参数
+        # Generate ground truth parameters
         tau1_image, tau2_image, a_image = self.simulate_ground_truth_image()
         
         histograms = []
         
         for i in range(self.image_size):
             for j in range(self.image_size):
-                # 获取当前像素的参数
+                # Get current pixel parameters
                 tau1 = tau1_image[i, j]
                 tau2 = tau2_image[i, j]
                 a = a_image[i, j]
                 
-                # 生成像素直方图
+                # Generate pixel histogram
                 histogram = self.simulate_pixel_histogram(tau1, tau2, a, n_photons)
                 histograms.append(histogram)
         
@@ -162,70 +162,70 @@ class PaperExperimentReproductionFixed:
     
     def pixel_wise_analysis(self, histogram: np.ndarray) -> Tuple[float, float, float]:
         """
-        像素级分析（传统方法）
+        Pixel-wise analysis (traditional method)
         
         Args:
-            histogram: 像素直方图
+            histogram: Pixel histogram
             
         Returns:
-            tau1_est, tau2_est, a_est: 估计的参数
+            tau1_est, tau2_est, a_est: Estimated parameters
         """
         def double_exp(t, a1, tau1, a2, tau2, offset):
             return a1 * np.exp(-t / tau1) + a2 * np.exp(-t / tau2) + offset
         
-        # 初始猜测
+        # Initial guess
         p0 = [np.max(histogram) * 0.6, 2.0, np.max(histogram) * 0.4, 0.7, np.min(histogram)]
         
         try:
             popt, pcov = curve_fit(double_exp, self.time_channel_centers, histogram, p0=p0, maxfev=1000)
             return popt[1], popt[3], popt[0] / (popt[0] + popt[2])  # tau1, tau2, a
         except:
-            return 2.0, 0.7, 0.6  # 默认值
+            return 2.0, 0.7, 0.6  # Default values
     
     def global_analysis(self, histograms: List[np.ndarray]) -> Tuple[float, float, List[float]]:
         """
-        全局分析
+        Global analysis
         
         Args:
-            histograms: 所有像素的直方图
+            histograms: Histograms for all pixels
             
         Returns:
-            tau1_global, tau2_global, a_list: 全局τ1, τ2和每个像素的a
+            tau1_global, tau2_global, a_list: Global τ1, τ2 and a for each pixel
         """
-        # 合并所有直方图
+        # Combine all histograms
         combined_histogram = np.sum(histograms, axis=0)
         
-        # 拟合全局参数
+        # Fit global parameters
         tau1_global, tau2_global, _ = self.pixel_wise_analysis(combined_histogram)
         
-        # 为每个像素估计a
+        # Estimate a for each pixel
         a_list = []
         total_photons = np.sum(combined_histogram)
         for histogram in histograms:
-            # 简化：假设a与总光子数成正比
+            # Simplified: assume a is proportional to total photon count
             a_est = np.sum(histogram) / total_photons
             a_list.append(a_est)
         
         return tau1_global, tau2_global, a_list
     
     def calculate_mse(self, true_values: np.ndarray, estimated_values: np.ndarray) -> float:
-        """计算均方误差"""
+        """Calculate mean square error"""
         return np.mean((true_values - estimated_values) ** 2)
     
     def experiment_1_prior_estimation(self, n_values: List[int], L_values: List[int], 
                                     num_repeats: int = 5) -> Dict:
         """
-        实验1：先验分布估计性能评估
+        Experiment 1: Prior distribution estimation performance evaluation
         
         Args:
-            n_values: 光子数列表
-            L_values: NPMLE区间数列表
-            num_repeats: 重复次数
+            n_values: List of photon numbers
+            L_values: List of NPMLE interval numbers
+            num_repeats: Number of repetitions
             
         Returns:
-            结果字典
+            Results dictionary
         """
-        print("=== 实验1：先验分布估计性能评估 ===")
+        print("=== Experiment 1: Prior Distribution Estimation Performance Evaluation ===")
         
         results = {}
         
@@ -235,24 +235,24 @@ class PaperExperimentReproductionFixed:
                 errors = []
                 
                 for repeat in range(num_repeats):
-                    print(f"光子数: {n}, 区间数: {L}, 重复: {repeat+1}/{num_repeats}")
+                    print(f"Photons: {n}, Intervals: {L}, Repeat: {repeat+1}/{num_repeats}")
                     
                     try:
-                        # 模拟图像
+                        # Simulate image
                         histograms, tau1_image, tau2_image, a_image = self.simulate_flim_image(n)
                         
-                        # 计算真实累积分布
+                        # Calculate true cumulative distribution
                         true_taus = []
                         for i in range(self.image_size):
                             for j in range(self.image_size):
                                 true_taus.extend([tau1_image[i, j], tau2_image[i, j]])
                         
-                        # 简化的L2距离计算
-                        error = np.std(true_taus)  # 简化版本
+                        # Simplified L2 distance calculation
+                        error = np.std(true_taus)  # Simplified version
                         errors.append(error)
                     except Exception as e:
-                        print(f"错误: {e}")
-                        errors.append(0.0)  # 使用默认值
+                        print(f"Error: {e}")
+                        errors.append(0.0)  # Use default value
                 
                 results[n][L] = np.mean(errors)
         
@@ -260,21 +260,21 @@ class PaperExperimentReproductionFixed:
     
     def experiment_2_pixel_wise_recovery(self, n_values: List[int], num_repeats: int = 5) -> Dict:
         """
-        实验2：像素级寿命恢复性能比较
+        Experiment 2: Pixel-wise lifetime recovery performance comparison
         
         Args:
-            n_values: 光子数列表
-            num_repeats: 重复次数
+            n_values: List of photon numbers
+            num_repeats: Number of repetitions
             
         Returns:
-            结果字典
+            Results dictionary
         """
-        print("=== 实验2：像素级寿命恢复性能比较 ===")
+        print("=== Experiment 2: Pixel-wise Lifetime Recovery Performance Comparison ===")
         
         results = {'pixel_wise': {}, 'global': {}, 'nebf': {}}
         
         for n in n_values:
-            print(f"光子数: {n}")
+            print(f"Photons: {n}")
             
             pixel_wise_errors = {'tau1': [], 'tau2': [], 'a': []}
             global_errors = {'tau1': [], 'tau2': [], 'a': []}
@@ -282,10 +282,10 @@ class PaperExperimentReproductionFixed:
             
             for repeat in range(num_repeats):
                 try:
-                    # 模拟图像
+                    # Simulate image
                     histograms, tau1_image, tau2_image, a_image = self.simulate_flim_image(n)
                     
-                    # 像素级分析
+                    # Pixel-wise analysis
                     pixel_wise_tau1 = np.zeros((self.image_size, self.image_size))
                     pixel_wise_tau2 = np.zeros((self.image_size, self.image_size))
                     pixel_wise_a = np.zeros((self.image_size, self.image_size))
@@ -297,16 +297,16 @@ class PaperExperimentReproductionFixed:
                         pixel_wise_tau2[i, j] = tau2_est
                         pixel_wise_a[i, j] = a_est
                     
-                    # 全局分析
+                    # Global analysis
                     global_tau1, global_tau2, global_a_list = self.global_analysis(histograms)
                     global_a = np.array(global_a_list).reshape(self.image_size, self.image_size)
                     
-                    # NEB-FLIM（简化版本）
+                    # NEB-FLIM (simplified version)
                     nebf_tau1 = (pixel_wise_tau1 + global_tau1) / 2
                     nebf_tau2 = (pixel_wise_tau2 + global_tau2) / 2
                     nebf_a = (pixel_wise_a + global_a) / 2
                     
-                    # 计算误差
+                    # Calculate errors
                     pixel_wise_errors['tau1'].append(self.calculate_mse(tau1_image, pixel_wise_tau1))
                     pixel_wise_errors['tau2'].append(self.calculate_mse(tau2_image, pixel_wise_tau2))
                     pixel_wise_errors['a'].append(self.calculate_mse(a_image, pixel_wise_a))
@@ -320,13 +320,13 @@ class PaperExperimentReproductionFixed:
                     nebf_errors['a'].append(self.calculate_mse(a_image, nebf_a))
                     
                 except Exception as e:
-                    print(f"错误: {e}")
-                    # 使用默认值
+                    print(f"Error: {e}")
+                    # Use default values
                     for method in [pixel_wise_errors, global_errors, nebf_errors]:
                         for param in ['tau1', 'tau2', 'a']:
                             method[param].append(1.0)
             
-            # 计算平均误差
+            # Calculate average errors
             for method in ['pixel_wise', 'global', 'nebf']:
                 results[method][n] = {
                     'tau1': np.mean(pixel_wise_errors['tau1'] if method == 'pixel_wise' else 
@@ -341,46 +341,46 @@ class PaperExperimentReproductionFixed:
     
     def experiment_3_computation_efficiency(self, image_sizes: List[int], n_photons: int = 1000) -> Dict:
         """
-        实验3：计算效率比较
+        Experiment 3: Computation efficiency comparison
         
         Args:
-            image_sizes: 图像大小列表
-            n_photons: 光子数
+            image_sizes: List of image sizes
+            n_photons: Number of photons
             
         Returns:
-            结果字典
+            Results dictionary
         """
-        print("=== 实验3：计算效率比较 ===")
+        print("=== Experiment 3: Computation Efficiency Comparison ===")
         
         results = {}
         
         for size in image_sizes:
-            print(f"图像大小: {size}x{size}")
+            print(f"Image size: {size}x{size}")
             
-            # 临时修改图像大小
+            # Temporarily modify image size
             original_size = self.image_size
             self.image_size = size
             
             try:
-                # 模拟图像
+                # Simulate image
                 histograms, _, _, _ = self.simulate_flim_image(n_photons)
                 
-                # 测量计算时间
+                # Measure computation time
                 times = {'pixel_wise': [], 'global': [], 'nebf': []}
                 
-                for _ in range(3):  # 重复3次取平均
-                    # 像素级分析时间
+                for _ in range(3):  # Repeat 3 times for average
+                    # Pixel-wise analysis time
                     start_time = time.time()
                     for histogram in histograms:
                         self.pixel_wise_analysis(histogram)
                     times['pixel_wise'].append(time.time() - start_time)
                     
-                    # 全局分析时间
+                    # Global analysis time
                     start_time = time.time()
                     self.global_analysis(histograms)
                     times['global'].append(time.time() - start_time)
                     
-                    # NEB-FLIM时间（简化版本）
+                    # NEB-FLIM time (simplified version)
                     start_time = time.time()
                     for histogram in histograms:
                         self.pixel_wise_analysis(histogram)
@@ -392,19 +392,19 @@ class PaperExperimentReproductionFixed:
                 }
                 
             except Exception as e:
-                print(f"错误: {e}")
+                print(f"Error: {e}")
                 results[size] = {'pixel_wise': 1.0, 'global': 1.0, 'nebf': 1.0}
             
-            # 恢复原始图像大小
+            # Restore original image size
             self.image_size = original_size
         
         return results
     
     def plot_results(self, results: Dict, save_path: str = "paper_experiment_results_fixed.png"):
-        """绘制结果"""
+        """Plot results"""
         fig, axes = plt.subplots(2, 2, figsize=(15, 12))
         
-        # 实验1结果
+        # Experiment 1 results
         if 'experiment_1' in results:
             ax = axes[0, 0]
             for L in [400, 600, 800, 1000, 1200]:
@@ -418,7 +418,7 @@ class PaperExperimentReproductionFixed:
             ax.legend()
             ax.grid(True)
         
-        # 实验2结果
+        # Experiment 2 results
         if 'experiment_2' in results:
             ax = axes[0, 1]
             methods = ['pixel_wise', 'global', 'nebf']
@@ -436,7 +436,7 @@ class PaperExperimentReproductionFixed:
             ax.legend()
             ax.grid(True)
         
-        # 实验3结果
+        # Experiment 3 results
         if 'experiment_3' in results:
             ax = axes[1, 0]
             methods = ['pixel_wise', 'global', 'nebf']
@@ -453,7 +453,7 @@ class PaperExperimentReproductionFixed:
             ax.legend()
             ax.grid(True)
         
-        # 真实参数图像
+        # Ground truth parameter image
         ax = axes[1, 1]
         tau1_image, tau2_image, a_image = self.simulate_ground_truth_image()
         
@@ -463,14 +463,14 @@ class PaperExperimentReproductionFixed:
         
         plt.tight_layout()
         plt.savefig(save_path, dpi=300, bbox_inches='tight')
-        print(f"结果已保存到: {save_path}")
+        print(f"Results saved to: {save_path}")
 
 
 def main():
-    """主函数：运行所有实验"""
-    print("复现论文实验：非参数贝叶斯荧光寿命分析性能评估（修复版）\n")
+    """Main function: run all experiments"""
+    print("Paper Experiment Reproduction: Non-parametric Bayesian Fluorescence Lifetime Analysis Performance Evaluation (Fixed Version)\n")
     
-    # 初始化实验
+    # Initialize experiment
     experiment = PaperExperimentReproductionFixed(
         image_size=32,
         time_range=10.0,  # 10 ns
@@ -479,47 +479,47 @@ def main():
         irf_std=0.1       # 100 ps = 0.1 ns
     )
     
-    # 实验1：先验分布估计性能（使用较小的光子数避免数值问题）
-    n_values = [10, 32, 100, 316, 1000]  # 减少光子数范围
-    L_values = [400, 600, 800]  # 减少区间数
+    # Experiment 1: Prior distribution estimation performance (use smaller photon numbers to avoid numerical issues)
+    n_values = [10, 32, 100, 316, 1000]  # Reduced photon number range
+    L_values = [400, 600, 800]  # Reduced interval numbers
     experiment_1_results = experiment.experiment_1_prior_estimation(n_values, L_values, num_repeats=3)
     
-    # 实验2：像素级恢复性能
-    n_values_2 = [100, 316, 1000, 3162]  # 减少光子数范围
+    # Experiment 2: Pixel-wise recovery performance
+    n_values_2 = [100, 316, 1000, 3162]  # Reduced photon number range
     experiment_2_results = experiment.experiment_2_pixel_wise_recovery(n_values_2, num_repeats=3)
     
-    # 实验3：计算效率
-    image_sizes = [16, 32, 64]  # 减少图像大小
+    # Experiment 3: Computation efficiency
+    image_sizes = [16, 32, 64]  # Reduced image sizes
     experiment_3_results = experiment.experiment_3_computation_efficiency(image_sizes, n_photons=1000)
     
-    # 合并结果
+    # Combine results
     all_results = {
         'experiment_1': experiment_1_results,
         'experiment_2': experiment_2_results,
         'experiment_3': experiment_3_results
     }
     
-    # 绘制结果
+    # Plot results
     experiment.plot_results(all_results)
     
-    # 打印关键结果
-    print("\n=== 关键结果摘要 ===")
-    print("实验1 - 先验分布估计:")
+    # Print key results
+    print("\n=== Key Results Summary ===")
+    print("Experiment 1 - Prior Distribution Estimation:")
     for n in [100, 1000]:
         if n in experiment_1_results:
-            print(f"  光子数 {n}: 平均误差 = {experiment_1_results[n].get(800, 'N/A'):.4f}")
+            print(f"  Photons {n}: Average Error = {experiment_1_results[n].get(800, 'N/A'):.4f}")
     
-    print("\n实验2 - 像素级恢复:")
+    print("\nExperiment 2 - Pixel-wise Recovery:")
     for method in ['pixel_wise', 'global', 'nebf']:
         if method in experiment_2_results:
             print(f"  {method}: τ1 MSE = {experiment_2_results[method].get(1000, {}).get('tau1', 'N/A'):.4f}")
     
-    print("\n实验3 - 计算效率:")
+    print("\nExperiment 3 - Computation Efficiency:")
     for size in [16, 32, 64]:
         if size in experiment_3_results:
-            print(f"  {size}x{size}: NEB-FLIM时间 = {experiment_3_results[size]['nebf']:.3f}s")
+            print(f"  {size}x{size}: NEB-FLIM Time = {experiment_3_results[size]['nebf']:.3f}s")
     
-    print("\n所有实验完成！")
+    print("\nAll experiments completed!")
 
 
 if __name__ == "__main__":
