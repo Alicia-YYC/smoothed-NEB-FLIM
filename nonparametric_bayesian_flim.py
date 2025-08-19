@@ -7,8 +7,6 @@ Features:
 3. Perform Non-Parametric Maximum Likelihood Estimation (NPMLE) to obtain prior distribution
 4. Apply Expectation-Maximization (EM) for Maximum A Posteriori (MAP) estimation to recover parameters for each pixel
 
-Author: AI Assistant
-Date: 2025-01-27
 """
 
 import numpy as np
@@ -144,26 +142,44 @@ class NonparametricBayesianFLIM:
         Returns:
             Lifetime probability array
         """
-        print("Building lifetime probability library...")
-        
-        tau_probabilities = np.zeros(self.num_tau_points)
-        
-        for i, histogram in enumerate(histograms):
-            # Fit each histogram
-            fitted_taus = self.fit_histogram_to_taus(histogram)
-            
-            # Update probability library
-            for tau in fitted_taus:
-                # Find nearest lifetime point
-                tau_idx = np.argmin(np.abs(self.tau_space - tau))
-                tau_probabilities[tau_idx] += 1
-            
+        print("Building lifetime probability library (fast scoring)...")
+
+        # Precompute decay dictionary over tau grid (L x C)
+        t = self.time_channel_centers  # (C,)
+        tau_space = self.tau_space     # (L,)
+        L = len(tau_space)
+        eps = 1e-12
+
+        # E[l, c] = exp(-t[c] / tau_space[l])
+        E = np.exp(-np.outer(1.0 / np.clip(tau_space, eps, None), t))  # (L, C)
+        # Normalize each tau row to sum 1 (probability shape)
+        E_sum = np.clip(E.sum(axis=1, keepdims=True), eps, None)
+        E_norm = E / E_sum  # (L, C)
+
+        tau_votes = np.zeros(L, dtype=float)
+
+        for i, y in enumerate(histograms):
+            y = np.asarray(y, dtype=float)
+            total = max(float(y.sum()), 1.0)
+            # Expected counts for each tau: lam = total * E_norm
+            lam = E_norm * total + eps  # (L, C)
+            # Poisson negative log-likelihood per tau
+            # nll = sum(lam - y*log(lam)) along channels
+            nll = lam.sum(axis=1) - (y * np.log(lam)).sum(axis=1)
+            # Pick the best tau (smallest nll) and vote
+            best_idx = int(np.argmin(nll))
+            tau_votes[best_idx] += 1.0
+
             if (i + 1) % 100 == 0:
                 print(f"Processed {i + 1} histograms")
-        
-        # Normalize
-        tau_probabilities = tau_probabilities / np.sum(tau_probabilities)
-        
+
+        # Normalize votes to probability
+        total_votes = tau_votes.sum()
+        if total_votes > 0:
+            tau_probabilities = tau_votes / total_votes
+        else:
+            tau_probabilities = np.ones(L, dtype=float) / L
+
         return tau_probabilities
     
     def fit_histogram_to_taus(self, histogram: np.ndarray, max_components: int = 3) -> List[float]:
