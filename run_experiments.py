@@ -23,7 +23,7 @@ def run_experiments():
         
         end_time = time.time()
         print(f"\nExperiments completed! Total time: {end_time - start_time:.2f} seconds")
-        print("Results saved to: paper_experiment_results_fixed.png")
+        print("Results saved to: error_line_charts.png")
         
     except Exception as e:
         print(f"Error running experiments: {e}")

@@ -111,10 +111,14 @@ class PaperExperimentReproductionFixed:
             Photon histogram
         """
         # Calculate ideal double exponential decay
-        ideal_decay = (a / tau1 * np.exp(-self.time_channel_centers / tau1) + 
-                      (1 - a) / tau2 * np.exp(-self.time_channel_centers / tau2))
-        
-        # Normalize
+        ideal_decay = (a / tau1 * np.exp(-self.time_channel_centers / tau1) +
+                       (1 - a) / tau2 * np.exp(-self.time_channel_centers / tau2))
+
+        # Convolve with IRF to follow the physical acquisition model
+        if getattr(self, "irf", None) is not None:
+            ideal_decay = fftconvolve(ideal_decay, self.irf, mode="same")
+
+        # Normalize after convolution
         ideal_decay = ideal_decay / np.sum(ideal_decay)
         
         # Allocate photon numbers
@@ -1063,81 +1067,53 @@ class PaperExperimentReproductionFixed:
 
 
 def main():
-    """Main function: run all experiments"""
-    print("Paper Experiment Reproduction: Non-parametric Bayesian Fluorescence Lifetime Analysis Performance Evaluation (Fixed Version)\n")
-    # Fix randomness for fair comparisons across runs
+    """Main function: run selected experiments for error_line_charts only (optimized)"""
+    print("Paper Experiment Reproduction (Optimized for error_line_charts)\n")
+    start_all = time.time()
+    # Fix randomness for reproducibility
     np.random.seed(42)
-    
-    # Initialize experiment
+
+    # Initialize experiment instance
     experiment = PaperExperimentReproductionFixed(
-        image_size=16,
+        image_size=32,
         time_range=10.0,  # 10 ns
         num_channels=256,
-        irf_mean=1.5,     # 1500 ps = 1.5 ns
-        irf_std=0.1       # 100 ps = 0.1 ns
-    )
-    
-    # Experiment 1: Prior distribution estimation performance (use smaller photon numbers to avoid numerical issues)
-    n_values = [10, 32, 100, 316, 1000]  # Reduced photon number range
-    L_values = [400, 600, 800]  # Reduced interval numbers
-    experiment_1_results = experiment.experiment_1_prior_estimation(n_values, L_values, num_repeats=1)
-    
-    # Experiment 2: Pixel-wise recovery performance (use n = 10, 32, 100)
-    n_values_2 = [10, 32, 100]
-    experiment_2_results = experiment.experiment_2_pixel_wise_recovery(n_values_2, num_repeats=3, lambda_laplacian=0.8)
-    
-    # Experiment 3: Computation efficiency (disabled by user request)
-    # image_sizes = [16, 32, 64]
-    # experiment_3_results = experiment.experiment_3_computation_efficiency(image_sizes, n_photons=1000)
-    
-    # Combine results
-    all_results = {
-        'experiment_1': experiment_1_results,
-        'experiment_2': experiment_2_results
-        # 'experiment_3': experiment_3_results
-    }
-    
-    # Generate ground truth parameters visualization
-    print("\n=== Generating Ground Truth Parameters Visualization ===")
-    experiment.plot_ground_truth_parameters()
-    
-    # Plot results
-    experiment.plot_results(all_results)
-
-    # Generate smoothing comparison and compose overview
-    print("\n=== Generating Smoothing Comparison ===")
-    experiment.plot_smoothing_comparison(n_photons=1000, lambda_laplacian=0.8,
-                                         save_path='smoothing_comparison.png')
-    experiment.compose_results_with_smoothing(
-        base_path='paper_experiment_results_fixed.png',
-        smoothing_path='smoothing_comparison.png',
-        out_path='paper_experiment_results_full.png'
+        irf_mean=1.5,
+        irf_std=0.1
     )
 
-    # Save the three error line charts as one PNG (use Experiment 2 results)
-    if 'experiment_2' in all_results:
-        experiment.plot_error_line_charts(all_results['experiment_2'], save_path='error_line_charts.png')
-    
-    # Print key results
-    print("\n=== Key Results Summary ===")
-    print("Experiment 1 - Prior Distribution Estimation:")
-    for n in [100, 1000]:
-        if n in experiment_1_results:
-            print(f"  Photons {n}: Average Error = {experiment_1_results[n].get(800, 'N/A'):.4f}")
-    
-    print("\nExperiment 2 - Pixel-wise Recovery:")
-    for method in ['pixel_wise', 'global', 'nebf']:
+    # === Configurations per user request ===
+    L_requested = 1400  # Not used directly here, but kept for record
+    n_values_2 = [100, 316, 1000, 3162, 10000, 31623]  # 10^2 ... 10^4.5
+
+    # --- Run Experiment 2 only (pixel-wise recovery & variants) ---
+    print("\n=== Running Experiment 2 only (for error_line_charts) ===")
+    experiment_2_results = experiment.experiment_2_pixel_wise_recovery(
+        n_values_2, num_repeats=1, lambda_laplacian=0.8)
+
+    # Plot error line charts
+    experiment.plot_error_line_charts(experiment_2_results, save_path='error_line_charts.png')
+
+    # --- Summary ---
+    print("\n=== Key Results (τ1 MSE) ===")
+    for method in ['pixel_wise', 'global', 'nebf', 'nebf_smooth']:
         if method in experiment_2_results:
-            for n in [10, 32, 100]:
-                if n in experiment_2_results[method]:
-                    print(f"  {method} @ n={n}: τ1 MSE = {experiment_2_results[method][n].get('tau1', 'N/A'):.4f}")
-    
-    # print("\nExperiment 3 - Computation Efficiency:")
-    # for size in [16, 32, 64]:
-    #     if size in experiment_3_results:
-    #         print(f"  {size}x{size}: NEB-FLIM Time = {experiment_3_results[size]['nebf']:.3f}s")
-    
-    print("\nAll experiments completed!")
+            for n in n_values_2:
+                mse_val = experiment_2_results[method][n].get('tau1', np.nan)
+                print(f"  {method} @ n={n}: τ1 MSE = {mse_val:.4e}")
+
+    # --- Experiment 3: Computation Efficiency ---
+    print("\n=== Running Experiment 3 (Computation Efficiency) ===")
+    image_sizes = [16, 32]
+    efficiency_results = experiment.experiment_3_computation_efficiency(image_sizes, n_photons=1000)
+
+    print("\n=== Efficiency Results (seconds) ===")
+    for size in image_sizes:
+        if size in efficiency_results:
+            print(f"  Image {size}x{size}: Pixel={efficiency_results[size]['pixel_wise']:.3f}s, "
+                  f"Global={efficiency_results[size]['global']:.3f}s, NEB={efficiency_results[size]['nebf']:.3f}s")
+
+    print(f"\nAll done! Total elapsed: {time.time() - start_all:.2f} s")
 
 
 if __name__ == "__main__":
