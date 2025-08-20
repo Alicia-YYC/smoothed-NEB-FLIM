@@ -71,23 +71,23 @@ class PaperExperimentReproductionFixed:
         H, W = self.image_size, self.image_size
         yy, xx = np.mgrid[0:H, 0:W]
         
-        # 1) τ1：中心高、四周低（高斯团），范围 0.44–0.50 ns
+        # 1) τ1: High at center, lower towards edges (Gaussian blob), range 0.44–0.50 ns
         tau1_min, tau1_max = 0.44, 0.50  # ns
         amp1 = tau1_max - tau1_min       # 0.06 ns
-        cy, cx = (H-1)/2, (W-1)/2        # 中心
-        sigma1 = 6.0                     # 可微调团的大小
+        cy, cx = (H-1)/2, (W-1)/2        # Center position
+        sigma1 = 6.0                     # Blob size (tunable)
         r2_center = (yy-cy)**2 + (xx-cx)**2
         tau1_image = tau1_min + amp1 * np.exp(-r2_center/(2*sigma1**2))
         
-        # 2) τ2：左下角高、向右上角递减，范围 1.85–2.15 ns
+        # 2) τ2: High at bottom-left corner, decreasing towards top-right, range 1.85–2.15 ns
         tau2_min, tau2_max = 1.85, 2.15  # ns
         amp2 = tau2_max - tau2_min       # 0.30 ns
-        oy, ox = H-1, 0                  # 左下角
+        oy, ox = H-1, 0                  # Bottom-left corner seed
         r_corner = np.sqrt((yy-oy)**2 + (xx-ox)**2)
         r_corner_n = (r_corner - r_corner.min()) / (r_corner.max() - r_corner.min())
-        tau2_image = tau2_max - amp2 * r_corner_n  # 角上最大，远离角逐渐减到最小
+        tau2_image = tau2_max - amp2 * r_corner_n  # Highest at corner, decreases with distance
         
-        # 3) a：四分之一同心圆（左上角最小，右下角最大），范围 0.41–0.50
+        # 3) a: Quarter concentric gradient (min at top-left, max at bottom-right), range 0.41–0.50
         a_min, a_max = 0.41, 0.50
         r_tl = np.sqrt((yy - 0)**2 + (xx - 0)**2)
         r_tl_n = (r_tl - r_tl.min()) / (r_tl.max() - r_tl.min())
@@ -885,8 +885,8 @@ class PaperExperimentReproductionFixed:
 
         Variants compared:
           - baseline: original a_image from simulate_ground_truth_image
-          - reversed: flipud+fliplr of baseline (方向相反)
-          - orthogonal: 沿另一对角线梯度 (xx+yy)
+          - reversed: flipud+fliplr of baseline (opposite direction)
+          - orthogonal: gradient along the other diagonal (xx+yy)
 
         Returns:
             Dict[variant][method] -> { 'mse_tau1', 'mse_tau2', 'mse_a' }
@@ -898,7 +898,7 @@ class PaperExperimentReproductionFixed:
 
         # Build variants of a_image
         a_min, a_max = 0.41, 0.50
-        # orthogonal gradient (另一对角线)
+        # orthogonal gradient (other diagonal)
         diag2 = (xx + yy)
         diag2_n = (diag2 - diag2.min()) / (diag2.max() - diag2.min())
         a_orth = a_min + (a_max - a_min) * diag2_n
