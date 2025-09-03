@@ -390,7 +390,7 @@ class PaperExperimentReproductionFixed:
         else:
             sm_tau1 = self.laplacian_smooth_2d(pw_tau1, lambda_laplacian)
             sm_tau2 = self.laplacian_smooth_2d(pw_tau2, lambda_laplacian)
-        sm_a = self.laplacian_smooth_2d(pw_a, lambda_laplacian)
+        sm_a = pw_a.copy()
 
         # Compute MSEs
         metrics = {
@@ -613,9 +613,10 @@ class PaperExperimentReproductionFixed:
                     nebf_a = (pixel_wise_a + global_a) / 2
 
                     # Smoothed NEB (τ1 and τ2 smoothed; 'a' unchanged)
-                    nebf_tau1_s = self.laplacian_smooth_2d(nebf_tau1, lambda_laplacian)
-                    nebf_tau2_s = self.laplacian_smooth_2d(nebf_tau2, lambda_laplacian)
-                    nebf_a_s = nebf_a
+                    nebf_tau1_s = np.exp(self.laplacian_smooth_2d(np.log(np.clip(nebf_tau1, 1e-6, None)), lambda_laplacian))
+                    nebf_tau2_s = np.exp(self.laplacian_smooth_2d(np.log(np.clip(nebf_tau2, 1e-6, None)), lambda_laplacian))
+                    nebf_a_s    = nebf_a   
+
                     
                     # Calculate errors
                     pixel_wise_errors['tau1'].append(self.calculate_mse(tau1_image, pixel_wise_tau1))
@@ -1075,23 +1076,29 @@ def main():
 
     # Initialize experiment instance
     experiment = PaperExperimentReproductionFixed(
-        image_size=32,
+        image_size=16,
         time_range=10.0,  # 10 ns
         num_channels=256,
         irf_mean=1.5,
         irf_std=0.1
     )
 
-    # === Configurations per user request ===
-    L_requested = 1400  # Not used directly here, but kept for record
-    n_values_2 = [100, 316, 1000, 3162, 10000, 31623]  # 10^2 ... 10^4.5
+    # === Configurations ===
+    n_values_1 = [10]            # photons per pixel
+    L_values = [1400]            # interval number
+    n_values_2 = [100, 316, 1000, 3162, 10000, 31623]  # for Experiment 2
 
-    # --- Run Experiment 2 only (pixel-wise recovery & variants) ---
-    print("\n=== Running Experiment 2 only (for error_line_charts) ===")
+    # --- Experiment 1: Prior estimation ---
+    print("\n=== Running Experiment 1 (Prior Estimation) ===")
+    experiment_1_results = experiment.experiment_1_prior_estimation(
+        n_values_1, L_values, num_repeats=1)
+
+    # --- Experiment 2: Pixel-wise recovery & variants ---
+    print("\n=== Running Experiment 2 (Pixel-wise Recovery) ===")
     experiment_2_results = experiment.experiment_2_pixel_wise_recovery(
         n_values_2, num_repeats=1, lambda_laplacian=0.8)
 
-    # Plot error line charts
+    # Plot error line charts (Experiment 2)
     experiment.plot_error_line_charts(experiment_2_results, save_path='error_line_charts.png')
 
     # --- Summary ---
