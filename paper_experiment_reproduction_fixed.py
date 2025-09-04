@@ -191,7 +191,8 @@ class PaperExperimentReproductionFixed:
 
         # Parameterization: p = [f, tau1, tau2, offset]
         # 0<=f<=1, tau1 in [0.4,0.6] ns, tau2 in [1.8,2.2] ns (can be tuned), offset>=0
-        bounds = [(0.0, 1.0), (0.4, 0.6), (1.8, 2.2), (0.0, max(1.0, np.min(y)))]
+        # Slightly widen bounds to allow true values near edges
+        bounds = [(0.0, 1.0), (0.38, 0.62), (1.75, 2.25), (0.0, max(1.0, np.min(y)))]
         p0 = np.array([0.6, 0.48, 2.0, max(0.0, float(np.min(y)))])
 
         irf = getattr(self, 'irf', None)
@@ -210,10 +211,12 @@ class PaperExperimentReproductionFixed:
             lam = model_expected(p)
             return float(np.sum(lam - y * np.log(lam)))  # up to constant
 
-        # Try a couple of initializations
+        # More diverse initial guesses to improve convergence
         inits = [p0,
                  np.array([0.5, 0.46, 2.05, p0[3]]),
-                 np.array([0.7, 0.50, 1.95, p0[3]])]
+                 np.array([0.7, 0.50, 1.95, p0[3]]),
+                 np.array([0.4, 0.44, 2.10, p0[3]]),
+                 np.array([0.8, 0.52, 1.90, p0[3]])]
 
         best_val = np.inf
         best_p = p0
